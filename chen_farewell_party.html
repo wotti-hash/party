@@ -60,7 +60,7 @@
   td.editable { cursor: text; }
   td.editable:hover { background: #FFF8ED !important; }
   td.editable:focus { background: #FFF3DE !important; outline: 2px solid #E8910C; border-radius: 3px; }
-  td.editable:empty::before { content: attr(data-ph); color: #bbb; }
+  td.editable:empty::after { content: attr(data-ph); color: #bbb; }
 
   select.att-sel { font-family: inherit; font-size: 13px; padding: 3px 6px; border: 1px solid #cfd8e3; border-radius: 6px; background: #fff; color: #333; }
   select.att-sel.st-出席 { color: #2E7D46; font-weight: 700; border-color: #b6dcc2; background: #f2fbf5; }
@@ -85,7 +85,53 @@
     body { background: #fff; padding: 0; }
     .page { box-shadow: none; border-radius: 0; margin: 0; max-width: none; }
     #cmt-fab, #cmt-panel, .cmt-pin, .toolbar, .btn.del, #tool-bar, #hist-panel, #link-editor { display: none !important; }
-    td.editable:empty::before { content: ""; }
+    td.editable:empty::after { content: ""; }
+  }
+
+  /* ============ スマホ縦画面向け（レスポンシブ） ============ */
+  @media (max-width: 640px) {
+    body { padding: 12px; }
+    .page { padding: 18px 14px; border-radius: 10px; }
+    h1 { font-size: 19px; line-height: 1.35; }
+    .subtitle { font-size: 12px; }
+    .note, .note.warn { font-size: 11.5px; padding: 9px 11px; }
+
+    /* 開催概要：ラベルと値を縦積み */
+    .info .ib { padding: 4px 14px 8px; }
+    .info .row { flex-direction: column; gap: 2px; padding: 8px 0; }
+    .info .row .k { width: auto; font-size: 12px; }
+
+    /* サマリー：2列並び */
+    .summary { gap: 8px; }
+    .sc { min-width: calc(50% - 4px); padding: 8px 8px; }
+    .sc .n { font-size: 22px; }
+    .sc .l { font-size: 11px; }
+
+    /* 出席者テーブル：1人=1カードの縦積みに変換 */
+    table.att thead { display: none; }
+    table.att, table.att tbody, table.att tr, table.att td { display: block; width: 100%; box-sizing: border-box; }
+    table.att tr { border: 1px solid #cfe0ee; border-radius: 8px; margin-bottom: 12px; padding: 4px 12px 8px; background: #fff; }
+    table.att tr:nth-child(even) td { background: transparent; }
+    table.att td { border: none; border-bottom: 1px dashed #eef2f6; padding: 9px 0; display: flex; align-items: center; gap: 10px; min-height: 22px; }
+    table.att td:last-child { border-bottom: none; }
+    table.att td::before {
+      content: attr(data-label); flex: none; width: 82px; font-weight: 700;
+      color: #005A9E; font-size: 12px;
+    }
+    table.att td.editable { display: flex; }
+    table.att td.editable:empty::after { color: #bbb; }
+    table.att td.no { justify-content: flex-start; color: #0078D4; font-weight: 800;
+                      background: #F3F8FE; margin: 0 -12px; padding: 6px 12px; border-radius: 8px 8px 0 0; border-bottom: 1px solid #dcebfb; }
+    table.att td.no::before { content: "No. "; color: #6b8bad; }
+    table.att td.del { justify-content: flex-start; }
+    table.att .att-sel { flex: 1; }
+
+    /* 下部ツールバー：小さめ＆折返し、コメントFABと重ならないよう幅制限 */
+    #tool-bar { left: 10px; right: 64px; bottom: 10px; gap: 6px; }
+    #tool-bar button { font-size: 12px; padding: 9px 12px; border-radius: 20px; }
+    #save-note { font-size: 10.5px; padding: 5px 9px; }
+    #cmt-fab { right: 10px; bottom: 10px; padding: 11px 14px; font-size: 13px; }
+    #cmt-toast { right: 10px; bottom: 64px; }
   }
 
   /* ============ テキスト直接編集（開催概要などの本文） ============ */
@@ -485,12 +531,13 @@ window.EditHistory = (function () {
       tdNo.className = "no"; tdNo.textContent = (i + 1);
       tr.appendChild(tdNo);
 
-      tr.appendChild(editableCell(r, "name",    "氏名",   "氏名", i));
+      tr.appendChild(editableCell(r, "name",    "氏名",   "名前", i));
       tr.appendChild(editableCell(r, "company", "会社名", "会社名", i));
 
       // 声がけ済
       var tdChk = document.createElement("td");
       tdChk.className = "chk-cell";
+      tdChk.setAttribute("data-label", "声がけ済");
       var chk = document.createElement("input");
       chk.type = "checkbox"; chk.className = "chk"; chk.checked = !!r.asked;
       chk.addEventListener("change", function () {
@@ -502,6 +549,7 @@ window.EditHistory = (function () {
 
       // 出欠
       var tdSt = document.createElement("td");
+      tdSt.setAttribute("data-label", "出欠");
       var sel = document.createElement("select");
       sel.className = "att-sel st-" + (r.status || "未定");
       STATUSES.forEach(function (s) {
@@ -522,6 +570,7 @@ window.EditHistory = (function () {
 
       var tdDel = document.createElement("td");
       tdDel.className = "del";
+      tdDel.setAttribute("data-label", "削除");
       var bd = document.createElement("button");
       bd.className = "btn del"; bd.textContent = "×"; bd.title = "この行を削除";
       bd.addEventListener("click", function () {
@@ -542,6 +591,7 @@ window.EditHistory = (function () {
     td.className = "editable";
     td.setAttribute("contenteditable", "true");
     td.setAttribute("data-ph", placeholder);
+    td.setAttribute("data-label", fieldLabel);
     td.textContent = esc(r[field]);
     var orig = "";
     td.addEventListener("focus", function () { orig = td.textContent.trim(); });
