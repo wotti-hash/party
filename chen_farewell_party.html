@@ -1,0 +1,1053 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>陳さんの送別会（リスクPJ）出席者管理</title>
+<style>
+  body {
+    font-family: 'Segoe UI', 'Meiryo', Tahoma, Geneva, Verdana, sans-serif;
+    background: #f5f5f5;
+    padding: 40px;
+    margin: 0;
+    color: #333;
+  }
+  .page {
+    max-width: 1100px;
+    margin: 0 auto 30px;
+    background: white;
+    padding: 40px 48px;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    position: relative;            /* コメントピンのアンカー */
+  }
+  h1 { font-size: 24px; margin: 0 0 4px; color: #222; }
+  .subtitle { font-size: 13px; color: #666; margin: 0 0 18px; }
+
+  /* 開催概要 */
+  .info { border: 1px solid #cfe0ee; border-radius: 8px; overflow: hidden; margin-bottom: 20px; }
+  .info .ih { background: #0078D4; color: #fff; font-weight: 700; font-size: 15px; padding: 9px 16px; }
+  .info .ib { padding: 4px 20px 10px; }
+  .info .row { display: flex; gap: 14px; padding: 9px 0; border-bottom: 1px dashed #e7eef5; font-size: 13.5px; }
+  .info .row:last-child { border-bottom: none; }
+  .info .row .k { flex: none; width: 120px; font-weight: 700; color: #005A9E; }
+  .info .row .v { color: #333; line-height: 1.7; flex: 1; }
+  .info .row .v .em { color: #9A3412; font-weight: 700; }
+  .pill { display: inline-block; background: #FFE0B2; color: #9A3412; font-weight: 700; font-size: 12px; padding: 1px 10px; border-radius: 10px; border: 1px solid #E8910C; }
+  .tbd { color: #9A3412; font-weight: 700; }
+
+  .secttl { font-size: 14px; font-weight: 700; color: #0078D4; margin: 22px 0 8px; padding-left: 10px; border-left: 4px solid #0078D4; }
+
+  /* ===== 集計サマリー ===== */
+  .summary { display: flex; flex-wrap: wrap; gap: 10px; margin: 6px 0 14px; }
+  .sc { flex: 1; min-width: 110px; background: #F9FBFD; border: 1px solid #E3F2FD; border-radius: 8px; padding: 10px 12px; text-align: center; }
+  .sc .n { font-size: 26px; font-weight: 800; line-height: 1.1; color: #005A9E; }
+  .sc .l { font-size: 11.5px; color: #666; margin-top: 2px; }
+  .sc.attend .n { color: #2E7D46; }
+  .sc.absent .n { color: #C62828; }
+  .sc.pending .n { color: #E8910C; }
+  .sc.asked  .n { color: #6A1B9A; }
+
+  /* ===== 出席者テーブル ===== */
+  table.att { border-collapse: collapse; width: 100%; margin: 4px 0 12px; font-size: 13px; }
+  table.att th { background: #E3F2FD; color: #005A9E; text-align: left; padding: 8px 10px; border: 1px solid #cfe0ee; white-space: nowrap; }
+  table.att td { padding: 6px 8px; border: 1px solid #e2e8f0; color: #444; vertical-align: middle; }
+  table.att tr:nth-child(even) td { background: #fcfdff; }
+  table.att .no { text-align: center; width: 34px; color: #888; font-weight: 700; }
+  table.att .del { text-align: center; width: 40px; }
+
+  /* テーブル内の常時編集セル */
+  td.editable { cursor: text; }
+  td.editable:hover { background: #FFF8ED !important; }
+  td.editable:focus { background: #FFF3DE !important; outline: 2px solid #E8910C; border-radius: 3px; }
+  td.editable:empty::before { content: attr(data-ph); color: #bbb; }
+
+  select.att-sel { font-family: inherit; font-size: 13px; padding: 3px 6px; border: 1px solid #cfd8e3; border-radius: 6px; background: #fff; color: #333; }
+  select.att-sel.st-出席 { color: #2E7D46; font-weight: 700; border-color: #b6dcc2; background: #f2fbf5; }
+  select.att-sel.st-欠席 { color: #C62828; font-weight: 700; border-color: #eec4c4; background: #fdf3f3; }
+  select.att-sel.st-未定 { color: #E8910C; font-weight: 700; border-color: #f0d5a6; background: #fffaf1; }
+
+  input.chk { width: 18px; height: 18px; cursor: pointer; accent-color: #6A1B9A; }
+  td.chk-cell { text-align: center; width: 74px; }
+
+  .btn { font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer; border-radius: 8px; padding: 8px 14px; border: 1px solid #cfd8e3; background: #fff; color: #444; }
+  .btn:hover { background: #f0f5fb; }
+  .btn.pri { background: #0078D4; color: #fff; border-color: #0078D4; }
+  .btn.pri:hover { background: #005A9E; }
+  .btn.del { border-color: #C62828; color: #C62828; background: #fff; padding: 4px 9px; font-size: 12px; border-radius: 6px; }
+  .btn.del:hover { background: #fdecea; }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 4px; }
+
+  .note { background: #F9FBFD; border: 1px solid #E3F2FD; border-radius: 6px; padding: 10px 14px; font-size: 12.5px; color: #555; margin: 12px 0 0; }
+  .note.warn { background: #FFF6E9; border-color: #F4C892; color: #8a5a00; margin: 0 0 18px; }
+
+  @media print {
+    body { background: #fff; padding: 0; }
+    .page { box-shadow: none; border-radius: 0; margin: 0; max-width: none; }
+    #cmt-fab, #cmt-panel, .cmt-pin, .toolbar, .btn.del, #tool-bar, #hist-panel, #link-editor { display: none !important; }
+    td.editable:empty::before { content: ""; }
+  }
+
+  /* ============ テキスト直接編集（開催概要などの本文） ============ */
+  body.edit-active [data-eid] { outline: 1px dashed #E8910C; outline-offset: 3px; border-radius: 3px; }
+  body.edit-active [data-eid]:hover { background: #FFF8ED; }
+  body.edit-active [data-eid][contenteditable="true"]:focus { background: #FFF3DE; outline: 2px solid #E8910C; }
+  body.edit-active [data-eid] a { text-decoration: underline dotted; text-underline-offset: 2px; cursor: pointer; }
+
+  /* リンク編集ポップオーバー */
+  #link-editor { position: absolute; z-index: 230; width: 340px; max-width: 90vw; background: #fff;
+                 border: 1px solid #0078D4; border-radius: 8px; box-shadow: 0 8px 22px rgba(0,0,0,.20);
+                 padding: 12px 14px; display: none; font-size: 12.5px; }
+  #link-editor.show { display: block; }
+  #link-editor .lbl { font-weight: 700; color: #005A9E; margin: 0 0 6px; }
+  #link-editor .txt { color: #666; font-size: 11.5px; margin: 0 0 8px; word-break: break-all; }
+  #link-editor input { width: 100%; box-sizing: border-box; border: 1px solid #cfd8e3; border-radius: 6px;
+                       font-family: inherit; font-size: 12.5px; padding: 7px 9px; color: #333; }
+  #link-editor .btns { display: flex; gap: 6px; margin-top: 10px; }
+  #link-editor button { font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer; border-radius: 6px; padding: 6px 10px; border: 1px solid #cfd8e3; background: #fff; color: #555; }
+  #link-editor button.apply { background: #2E7D46; color: #fff; border-color: #2E7D46; }
+  #link-editor button.unlink { background: #fff; color: #C62828; border-color: #C62828; }
+  #link-editor button.open { margin-left: auto; }
+
+  /* ============ 下部ツールバー（編集・履歴・保存） ============ */
+  #tool-bar { position: fixed; left: 20px; bottom: 20px; z-index: 210; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+  #tool-bar button { font-family: inherit; font-size: 13.5px; font-weight: 700; cursor: pointer; border: none;
+                     border-radius: 24px; padding: 11px 16px; box-shadow: 0 4px 12px rgba(0,0,0,.22); }
+  #edit-toggle { background: #E8910C; color: #fff; }
+  #edit-toggle:hover { background: #c9790a; }
+  #edit-toggle.on { background: #9A3412; }
+  #edit-link, #edit-save, #edit-cancel { display: none; }
+  body.edit-active #edit-link, body.edit-active #edit-save, body.edit-active #edit-cancel { display: inline-block; }
+  #edit-link { background: #0078D4; color: #fff; }
+  #edit-link:hover { background: #005A9E; }
+  #edit-save { background: #2E7D46; color: #fff; }
+  #edit-save:hover { background: #256b3a; }
+  #edit-cancel { background: #fff; color: #555; border: 1px solid #cfd8e3 !important; }
+  #hist-btn { background: #455A64; color: #fff; }
+  #hist-btn:hover { background: #37474F; }
+  #hist-btn .badge { display: inline-block; min-width: 18px; height: 18px; line-height: 18px; text-align: center;
+                     background: #E8910C; color: #fff; border-radius: 9px; font-size: 11px; margin-left: 6px; padding: 0 5px; }
+  #save-note { font-size: 11.5px; color: #2E7D46; background: #eef8f1; border: 1px solid #cfe8d7; border-radius: 20px; padding: 6px 12px; }
+
+  /* ============ 変更履歴パネル（左からスライド） ============ */
+  #hist-panel { position: fixed; top: 0; left: 0; height: 100vh; width: 400px; max-width: 94vw;
+                background: #fff; border-right: 1px solid #cfe0ee; box-shadow: 6px 0 18px rgba(0,0,0,.14);
+                transform: translateX(-100%); transition: transform .22s ease; z-index: 200;
+                display: flex; flex-direction: column; font-size: 13px; }
+  #hist-panel.open { transform: none; }
+  #hist-panel .ph { background: #455A64; color: #fff; padding: 12px 16px; display: flex; align-items: center; gap: 8px; }
+  #hist-panel .ph .t { font-weight: 700; font-size: 14px; flex: 1; }
+  #hist-panel .ph .x { background: transparent; border: none; color: #fff; font-size: 20px; cursor: pointer; line-height: 1; }
+  #hist-tools { padding: 10px 14px; border-bottom: 1px solid #eef2f6; display: flex; flex-wrap: wrap; gap: 6px; }
+  #hist-tools button { font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+                       border: 1px solid #455A64; background: #fff; color: #455A64; border-radius: 6px; padding: 6px 10px; }
+  #hist-tools button:hover { background: #eceff1; }
+  #hist-tools button.danger { border-color: #C62828; color: #C62828; }
+  #hist-tools button.danger:hover { background: #fdecea; }
+  #hist-list { flex: 1; overflow-y: auto; padding: 10px 14px; }
+  #hist-list .empty { color: #999; font-size: 12.5px; text-align: center; margin-top: 30px; }
+  .hist-item { border-left: 3px solid #90A4AE; background: #fafbfc; border-radius: 0 6px 6px 0; padding: 7px 10px; margin-bottom: 8px; }
+  .hist-item .ts { font-size: 10.5px; color: #90A4AE; font-weight: 700; }
+  .hist-item .cat { display: inline-block; font-size: 10px; font-weight: 700; color: #fff; background: #78909C;
+                    border-radius: 8px; padding: 0 7px; margin-left: 6px; }
+  .hist-item.cat-テキスト { border-left-color: #E8910C; } .hist-item.cat-テキスト .cat { background: #E8910C; }
+  .hist-item.cat-出欠   { border-left-color: #2E7D46; } .hist-item.cat-出欠 .cat { background: #2E7D46; }
+  .hist-item.cat-声がけ { border-left-color: #6A1B9A; } .hist-item.cat-声がけ .cat { background: #6A1B9A; }
+  .hist-item.cat-行     { border-left-color: #0078D4; } .hist-item.cat-行 .cat { background: #0078D4; }
+  .hist-item .d { font-size: 12.5px; color: #333; margin-top: 3px; line-height: 1.5; word-break: break-all; }
+
+  /* ============ コメント機能 ============ */
+  body.cmt-active .page { cursor: crosshair; }
+  .cmt-pin {
+    position: absolute; width: 24px; height: 24px; border-radius: 50%;
+    background: #E8910C; color: #fff; font-weight: 700; font-size: 12px;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 2px 5px rgba(0,0,0,.35); cursor: pointer; z-index: 60;
+    transform: translate(-50%, -50%); border: 2px solid #fff; user-select: none;
+  }
+  .cmt-pin.done { background: #2E7D46; }
+  .cmt-pin.sel  { outline: 3px solid #ffd27a; }
+
+  #cmt-fab {
+    position: fixed; right: 20px; bottom: 20px; z-index: 210;
+    background: #0078D4; color: #fff; border: none; border-radius: 28px;
+    padding: 12px 18px; font-size: 14px; font-weight: 700; cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0,0,0,.25); font-family: inherit;
+  }
+  #cmt-fab:hover { background: #005A9E; }
+  #cmt-fab .badge {
+    display: inline-block; min-width: 18px; height: 18px; line-height: 18px; text-align: center;
+    background: #E8910C; color: #fff; border-radius: 9px; font-size: 11px; margin-left: 6px; padding: 0 5px;
+  }
+
+  #cmt-panel {
+    position: fixed; top: 0; right: 0; height: 100vh; width: 360px; max-width: 92vw;
+    background: #fff; border-left: 1px solid #cfe0ee; box-shadow: -6px 0 18px rgba(0,0,0,.14);
+    transform: translateX(100%); transition: transform .22s ease; z-index: 200;
+    display: flex; flex-direction: column; font-size: 13px;
+  }
+  #cmt-panel.open { transform: none; }
+  #cmt-panel .ph { background: #005A9E; color: #fff; padding: 12px 16px; display: flex; align-items: center; gap: 8px; }
+  #cmt-panel .ph .t { font-weight: 700; font-size: 14px; flex: 1; }
+  #cmt-panel .ph .x { background: transparent; border: none; color: #fff; font-size: 20px; cursor: pointer; line-height: 1; }
+  #cmt-tools { padding: 10px 14px; border-bottom: 1px solid #eef2f6; display: flex; flex-wrap: wrap; gap: 6px; }
+  #cmt-tools button { font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+                      border: 1px solid #0078D4; background: #fff; color: #0078D4; border-radius: 6px; padding: 6px 10px; }
+  #cmt-tools button:hover { background: #E3F2FD; }
+  #cmt-tools button.on { background: #0078D4; color: #fff; }
+  #cmt-tools button.danger { border-color: #C62828; color: #C62828; }
+  #cmt-tools button.danger:hover { background: #fdecea; }
+  #cmt-hint { padding: 8px 14px; font-size: 11.5px; color: #777; background: #F9FBFD; border-bottom: 1px solid #eef2f6; }
+  #cmt-list { flex: 1; overflow-y: auto; padding: 12px 14px; }
+  #cmt-list .empty { color: #999; font-size: 12.5px; text-align: center; margin-top: 30px; }
+  .cmt-item { border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
+  .cmt-item.sel { border-color: #E8910C; box-shadow: 0 0 0 2px #ffe7c2; }
+  .cmt-item .top { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .cmt-item .nm { width: 22px; height: 22px; border-radius: 50%; background: #E8910C; color: #fff;
+                  font-weight: 700; font-size: 12px; display: flex; align-items: center; justify-content: center; flex: none; }
+  .cmt-item.done .nm { background: #2E7D46; }
+  .cmt-item .sec { font-size: 11.5px; color: #005A9E; font-weight: 700; flex: 1; line-height: 1.3; cursor: pointer; }
+  .cmt-item .meta { font-size: 10.5px; color: #aaa; margin: 0 0 6px; }
+  .cmt-item textarea { width: 100%; box-sizing: border-box; border: 1px solid #cfd8e3; border-radius: 6px;
+                       font-family: inherit; font-size: 12.5px; padding: 6px 8px; resize: vertical; min-height: 52px; color: #333; }
+  .cmt-item .acts { display: flex; gap: 6px; margin-top: 6px; }
+  .cmt-item .acts button { font-family: inherit; font-size: 11px; font-weight: 700; cursor: pointer;
+                           border: 1px solid #cfd8e3; background: #fff; color: #555; border-radius: 5px; padding: 3px 8px; }
+  .cmt-item .acts button.done { border-color: #2E7D46; color: #2E7D46; }
+  .cmt-item .acts button.del { border-color: #C62828; color: #C62828; margin-left: auto; }
+  #cmt-toast { position: fixed; bottom: 76px; right: 20px; z-index: 220; background: #1f2937; color: #fff;
+               padding: 9px 16px; border-radius: 8px; font-size: 12.5px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  #cmt-toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div class="page" id="top">
+  <h1 data-eid="title" data-elabel="タイトル">🎉 陳さんの送別会（リスクPJ）　出席者管理</h1>
+  <p class="subtitle">出席者の声がけ状況・出欠を管理します。名前・会社名などのセルは<b>クリックで直接編集</b>、「＋ 行を追加」で人を増やせます。人数は編集のたびに<b>自動で再集計</b>されます。文章・リンクは左下「✏️ テキスト編集」で編集でき、変更は「📝 変更履歴」に記録されます。（入力内容はこのブラウザに自動保存）</p>
+
+  <div class="note warn">
+    <b>💬 コメント機能</b>：右下の「コメント」ボタン → 「コメント追加：ON」でページ上をクリックすると番号付きピンを置いてメモ・依頼を残せます。「コピー / ダウンロード」でMarkdown出力できます。
+  </div>
+
+  <!-- 開催概要 -->
+  <div class="info">
+    <div class="ih">開催概要</div>
+    <div class="ib">
+      <div class="row"><span class="k">主賓</span><span class="v" data-eid="guest" data-elabel="開催概要 › 主賓"><b>陳さん</b>（リスクPJ）</span></div>
+      <div class="row"><span class="k">日時</span><span class="v" data-eid="date" data-elabel="開催概要 › 日時"><b>2026年 8月21日（金）</b> <span class="pill">開催予定</span></span></div>
+      <div class="row"><span class="k">場所</span><span class="v" data-eid="place" data-elabel="開催概要 › 場所"><span class="em">検討中</span></span></div>
+      <div class="row"><span class="k">対象</span><span class="v" data-eid="target" data-elabel="開催概要 › 対象"><b>IBM関連メンバー</b>　＋　<b>総研さん</b>（<span class="tbd">声がけ中</span>）</span></div>
+      <div class="row"><span class="k">幹事</span><span class="v" data-eid="organizer" data-elabel="開催概要 › 幹事"><b>桑垣</b>、<b>山下</b> 他</span></div>
+    </div>
+  </div>
+
+  <!-- 集計サマリー -->
+  <p class="secttl">出席状況サマリー（自動集計）</p>
+  <div class="summary" id="summary">
+    <div class="sc"><div class="n" id="c-total">0</div><div class="l">対象人数（合計）</div></div>
+    <div class="sc asked"><div class="n" id="c-asked">0</div><div class="l">声がけ済</div></div>
+    <div class="sc attend"><div class="n" id="c-attend">0</div><div class="l">出席</div></div>
+    <div class="sc absent"><div class="n" id="c-absent">0</div><div class="l">欠席</div></div>
+    <div class="sc pending"><div class="n" id="c-pending">0</div><div class="l">未定</div></div>
+  </div>
+
+  <!-- 出席者テーブル -->
+  <p class="secttl">出席者リスト</p>
+  <table class="att" id="att-table">
+    <thead>
+      <tr>
+        <th class="no">#</th>
+        <th style="min-width:130px;">名前</th>
+        <th style="min-width:130px;">会社名</th>
+        <th class="chk-cell">声がけ済</th>
+        <th style="width:110px;">出欠</th>
+        <th style="min-width:160px;">備考</th>
+        <th class="del">削除</th>
+      </tr>
+    </thead>
+    <tbody id="att-body"><!-- 行はJSで生成 --></tbody>
+  </table>
+
+  <div class="toolbar">
+    <button class="btn pri" id="add-row">＋ 行を追加</button>
+    <button class="btn" id="csv-copy">CSVコピー</button>
+    <button class="btn" id="csv-dl">CSVダウンロード</button>
+    <button class="btn del" id="clear-all">全消去</button>
+  </div>
+
+  <div class="note">
+    <b>出欠</b>は「未定 / 出席 / 欠席」から選択。<b>声がけ済</b>はチェックボックスで管理します。集計カードは変更のたびに自動更新されます。
+  </div>
+</div>
+
+<!-- ============ 下部ツールバー（編集・保存・履歴） ============ -->
+<div id="tool-bar">
+  <button id="edit-toggle">✏️ テキスト編集：OFF</button>
+  <button id="edit-link">🔗 選択をリンク化</button>
+  <button id="edit-save">💾 HTMLを保存</button>
+  <button id="edit-cancel">編集終了</button>
+  <button id="hist-btn">📝 変更履歴<span class="badge" id="hist-badge">0</span></button>
+  <span id="save-note">自動保存：ON</span>
+</div>
+
+<!-- リンク編集ポップオーバー -->
+<div id="link-editor">
+  <p class="lbl">リンク先を編集</p>
+  <p class="txt" id="link-editor-text"></p>
+  <input id="link-editor-input" type="url" placeholder="https://..." spellcheck="false">
+  <div class="btns">
+    <button class="apply" id="link-editor-apply">適用</button>
+    <button class="unlink" id="link-editor-unlink">リンク解除</button>
+    <button class="open" id="link-editor-close">閉じる</button>
+  </div>
+</div>
+
+<!-- 変更履歴パネル -->
+<div id="hist-panel">
+  <div class="ph">
+    <span class="t">📝 変更履歴</span>
+    <button class="x" id="hist-close" title="閉じる">×</button>
+  </div>
+  <div id="hist-tools">
+    <button id="hist-copy">コピー</button>
+    <button id="hist-download">ダウンロード</button>
+    <button id="hist-clear" class="danger">履歴消去</button>
+  </div>
+  <div id="hist-list"></div>
+</div>
+
+<!-- ============ コメント機能 UI ============ -->
+<button id="cmt-fab">💬 コメント<span class="badge" id="cmt-badge">0</span></button>
+<div id="cmt-panel">
+  <div class="ph">
+    <span class="t">コメント</span>
+    <button class="x" id="cmt-close" title="閉じる">×</button>
+  </div>
+  <div id="cmt-tools">
+    <button id="cmt-mode">コメント追加：OFF</button>
+    <button id="cmt-copy">コピー</button>
+    <button id="cmt-download">ダウンロード</button>
+    <button id="cmt-clear" class="danger">全消去</button>
+  </div>
+  <div id="cmt-hint">「コメント追加：ON」にして、メモしたい箇所をクリック → ピンを置いてコメントを入力。出力したMarkdownをClaudeに渡すと反映できます。</div>
+  <div id="cmt-list"></div>
+</div>
+<div id="cmt-toast"></div>
+
+<script>
+/* ================= 変更履歴ストア（共通） ================= */
+window.EditHistory = (function () {
+  "use strict";
+  var KEY = "farewell-chen-riskpj::history";
+  var items = load();
+
+  var badge   = document.getElementById("hist-badge");
+  var listEl  = document.getElementById("hist-list");
+  var panel   = document.getElementById("hist-panel");
+
+  function load() {
+    try { var v = JSON.parse(localStorage.getItem(KEY) || "[]"); return Array.isArray(v) ? v : []; }
+    catch (e) { return []; }
+  }
+  function persist() { try { localStorage.setItem(KEY, JSON.stringify(items)); } catch (e) {} }
+  function pad(n) { return (n < 10 ? "0" : "") + n; }
+  function nowStr() {
+    var d = new Date();
+    return d.getFullYear() + "/" + pad(d.getMonth() + 1) + "/" + pad(d.getDate()) + " " +
+           pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
+  }
+
+  function log(cat, desc) {
+    items.push({ ts: nowStr(), cat: cat, d: desc });
+    persist(); render();
+  }
+  function render() {
+    badge.textContent = items.length;
+    listEl.innerHTML = "";
+    if (!items.length) {
+      var e = document.createElement("div");
+      e.className = "empty";
+      e.textContent = "まだ変更履歴はありません。テキスト編集・出欠・声がけ・行の追加削除を行うとここに記録されます。";
+      listEl.appendChild(e); return;
+    }
+    // 新しい順に表示
+    for (var i = items.length - 1; i >= 0; i--) {
+      var it = items[i];
+      var el = document.createElement("div");
+      el.className = "hist-item cat-" + it.cat;
+      var head = document.createElement("div");
+      var ts = document.createElement("span"); ts.className = "ts"; ts.textContent = it.ts;
+      var cat = document.createElement("span"); cat.className = "cat"; cat.textContent = it.cat;
+      head.appendChild(ts); head.appendChild(cat);
+      var d = document.createElement("div"); d.className = "d"; d.textContent = it.d;
+      el.appendChild(head); el.appendChild(d);
+      listEl.appendChild(el);
+    }
+  }
+  function buildMarkdown() {
+    var lines = ["# 陳さんの送別会（リスクPJ）出席者管理 — 変更履歴", "", "- 件数: " + items.length, ""];
+    lines.push("| 日時 | 種別 | 変更内容 |");
+    lines.push("|---|---|---|");
+    items.forEach(function (it) {
+      lines.push("| " + it.ts + " | " + it.cat + " | " + String(it.d).replace(/\|/g, "\\|") + " |");
+    });
+    return lines.join("\n");
+  }
+  function all() { return items; }
+  function clearAll() { items = []; persist(); render(); }
+
+  // ---- パネル操作 ----
+  document.getElementById("hist-btn").addEventListener("click", function () { panel.classList.toggle("open"); });
+  document.getElementById("hist-close").addEventListener("click", function () { panel.classList.remove("open"); });
+  document.getElementById("hist-clear").addEventListener("click", function () {
+    if (!items.length) { toast("履歴がありません"); return; }
+    if (confirm("変更履歴をすべて消去します。よろしいですか？")) { clearAll(); toast("履歴を消去しました"); }
+  });
+  document.getElementById("hist-copy").addEventListener("click", function () {
+    if (!items.length) { toast("履歴がありません"); return; }
+    var txt = buildMarkdown();
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(txt).then(function () { toast("履歴をコピーしました"); }, function () { fbCopy(txt); });
+    } else { fbCopy(txt); }
+  });
+  document.getElementById("hist-download").addEventListener("click", function () {
+    if (!items.length) { toast("履歴がありません"); return; }
+    var blob = new Blob(["﻿" + buildMarkdown()], { type: "text/markdown;charset=utf-8" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a"); a.href = url; a.download = "陳さん送別会_変更履歴.md";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    toast("履歴をダウンロードしました");
+  });
+  function fbCopy(txt) {
+    var ta = document.createElement("textarea");
+    ta.value = txt; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand("copy"); toast("履歴をコピーしました"); } catch (e) { toast("コピーに失敗しました"); }
+    document.body.removeChild(ta);
+  }
+  function toast(msg) {
+    var t = document.getElementById("cmt-toast");
+    if (!t) return;
+    t.textContent = msg; t.classList.add("show");
+    setTimeout(function () { t.classList.remove("show"); }, 1800);
+  }
+
+  render();
+  return { log: log, render: render, all: all, clearAll: clearAll, buildMarkdown: buildMarkdown };
+})();
+</script>
+
+<script>
+/* ================= 出席者リスト（データ管理・自動集計・履歴） ================= */
+(function () {
+  "use strict";
+  var KEY = "farewell-chen-riskpj::attendees";
+  var STATUSES = ["未定", "出席", "欠席"];
+  var body   = document.getElementById("att-body");
+  var saveNote = document.getElementById("save-note");
+
+  var SEED = [
+    { name: "桑垣",   company: "IBM",   asked: true,  status: "出席", note: "幹事" },
+    { name: "山下",   company: "IBM",   asked: true,  status: "出席", note: "幹事" },
+    { name: "",       company: "IBM",   asked: false, status: "未定", note: "" },
+    { name: "",       company: "総研",  asked: false, status: "未定", note: "声がけ中" }
+  ];
+
+  var rows = load();
+
+  function load() {
+    try {
+      var v = JSON.parse(localStorage.getItem(KEY) || "null");
+      if (Array.isArray(v) && v.length) return v;
+    } catch (e) {}
+    return SEED.slice();
+  }
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(rows)); flashSaved(); } catch (e) {}
+  }
+  var savedTimer = null;
+  function flashSaved() {
+    saveNote.textContent = "保存しました ✓";
+    clearTimeout(savedTimer);
+    savedTimer = setTimeout(function () { saveNote.textContent = "自動保存：ON"; }, 1200);
+  }
+  function esc(s) { return (s == null ? "" : String(s)); }
+  function rowLabel(i, r) { return "出席者#" + (i + 1) + "（" + (r.name && r.name.trim() ? r.name.trim() : "未入力") + "）"; }
+
+  function render() {
+    body.innerHTML = "";
+    rows.forEach(function (r, i) {
+      var tr = document.createElement("tr");
+
+      var tdNo = document.createElement("td");
+      tdNo.className = "no"; tdNo.textContent = (i + 1);
+      tr.appendChild(tdNo);
+
+      tr.appendChild(editableCell(r, "name",    "氏名",   "氏名", i));
+      tr.appendChild(editableCell(r, "company", "会社名", "会社名", i));
+
+      // 声がけ済
+      var tdChk = document.createElement("td");
+      tdChk.className = "chk-cell";
+      var chk = document.createElement("input");
+      chk.type = "checkbox"; chk.className = "chk"; chk.checked = !!r.asked;
+      chk.addEventListener("change", function () {
+        r.asked = chk.checked; save(); updateSummary();
+        EditHistory.log("声がけ", rowLabel(i, r) + " 声がけ済：" + (chk.checked ? "OFF→ON（済）" : "ON→OFF（未）"));
+      });
+      tdChk.appendChild(chk);
+      tr.appendChild(tdChk);
+
+      // 出欠
+      var tdSt = document.createElement("td");
+      var sel = document.createElement("select");
+      sel.className = "att-sel st-" + (r.status || "未定");
+      STATUSES.forEach(function (s) {
+        var o = document.createElement("option");
+        o.value = s; o.textContent = s; if (s === r.status) o.selected = true;
+        sel.appendChild(o);
+      });
+      sel.addEventListener("change", function () {
+        var old = r.status; r.status = sel.value;
+        sel.className = "att-sel st-" + sel.value;
+        save(); updateSummary();
+        EditHistory.log("出欠", rowLabel(i, r) + " 出欠：" + old + "→" + sel.value);
+      });
+      tdSt.appendChild(sel);
+      tr.appendChild(tdSt);
+
+      tr.appendChild(editableCell(r, "note", "（任意）", "備考", i));
+
+      var tdDel = document.createElement("td");
+      tdDel.className = "del";
+      var bd = document.createElement("button");
+      bd.className = "btn del"; bd.textContent = "×"; bd.title = "この行を削除";
+      bd.addEventListener("click", function () {
+        var label = rowLabel(i, r);
+        rows.splice(i, 1); save(); render(); updateSummary();
+        EditHistory.log("行", "行を削除：" + label);
+      });
+      tdDel.appendChild(bd);
+      tr.appendChild(tdDel);
+
+      body.appendChild(tr);
+    });
+    updateSummary();
+  }
+
+  function editableCell(r, field, placeholder, fieldLabel, i) {
+    var td = document.createElement("td");
+    td.className = "editable";
+    td.setAttribute("contenteditable", "true");
+    td.setAttribute("data-ph", placeholder);
+    td.textContent = esc(r[field]);
+    var orig = "";
+    td.addEventListener("focus", function () { orig = td.textContent.trim(); });
+    td.addEventListener("input", function () { r[field] = td.textContent.trim(); save(); updateSummary(); });
+    td.addEventListener("blur",  function () {
+      r[field] = td.textContent.trim();
+      var cur = td.textContent.trim();
+      if (cur !== orig) {
+        EditHistory.log("テキスト", rowLabel(i, r) + " " + fieldLabel + "：「" + short(orig) + "」→「" + short(cur) + "」");
+      }
+    });
+    td.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); td.blur(); } });
+    return td;
+  }
+  function short(s) { s = s || "（空）"; return s.length > 40 ? s.slice(0, 40) + "…" : s; }
+
+  function updateSummary() {
+    var valid = rows.filter(function (r) {
+      return (r.name && r.name.trim()) || (r.company && r.company.trim());
+    });
+    document.getElementById("c-total").textContent   = valid.length;
+    document.getElementById("c-asked").textContent   = valid.filter(function (r) { return r.asked; }).length;
+    document.getElementById("c-attend").textContent  = valid.filter(function (r) { return r.status === "出席"; }).length;
+    document.getElementById("c-absent").textContent  = valid.filter(function (r) { return r.status === "欠席"; }).length;
+    document.getElementById("c-pending").textContent = valid.filter(function (r) { return r.status === "未定"; }).length;
+  }
+
+  document.getElementById("add-row").addEventListener("click", function () {
+    rows.push({ name: "", company: "", asked: false, status: "未定", note: "" });
+    save(); render();
+    EditHistory.log("行", "行を追加（#" + rows.length + "）");
+    var cells = body.querySelectorAll("tr:last-child td.editable");
+    if (cells[0]) cells[0].focus();
+  });
+
+  function buildCSV() {
+    var head = ["No", "名前", "会社名", "声がけ済", "出欠", "備考"];
+    var lines = [head.join(",")];
+    rows.forEach(function (r, i) {
+      lines.push([ (i + 1), csvCell(r.name), csvCell(r.company), r.asked ? "済" : "未", csvCell(r.status), csvCell(r.note) ].join(","));
+    });
+    return lines.join("\r\n");
+  }
+  function csvCell(s) {
+    s = (s == null ? "" : String(s));
+    if (/[",\r\n]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"';
+    return s;
+  }
+  document.getElementById("csv-copy").addEventListener("click", function () {
+    var txt = buildCSV();
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(txt).then(function () { toast("CSVをコピーしました"); }, function () { fallbackCopy(txt); });
+    } else { fallbackCopy(txt); }
+  });
+  function fallbackCopy(txt) {
+    var ta = document.createElement("textarea");
+    ta.value = txt; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand("copy"); toast("CSVをコピーしました"); } catch (e) { toast("コピー失敗"); }
+    document.body.removeChild(ta);
+  }
+  document.getElementById("csv-dl").addEventListener("click", function () {
+    var blob = new Blob(["﻿" + buildCSV()], { type: "text/csv;charset=utf-8" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a"); a.href = url; a.download = "陳さん送別会_出席者リスト.csv";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    toast("CSVをダウンロードしました");
+  });
+  document.getElementById("clear-all").addEventListener("click", function () {
+    if (confirm("出席者リストをすべて消去します。よろしいですか？")) {
+      rows = [{ name: "", company: "", asked: false, status: "未定", note: "" }];
+      save(); render();
+      EditHistory.log("行", "出席者リストを全消去");
+    }
+  });
+
+  function toast(msg) {
+    var t = document.getElementById("cmt-toast");
+    if (!t) return;
+    t.textContent = msg; t.classList.add("show");
+    setTimeout(function () { t.classList.remove("show"); }, 1800);
+  }
+
+  render();
+})();
+</script>
+
+<script>
+/* ================= テキスト・リンク直接編集（開催概要などの本文） ================= */
+(function () {
+  "use strict";
+  var FILENAME = "陳さん送別会_出席者管理.html";
+  var TXT_KEY  = "farewell-chen-riskpj::texts";
+  var editing  = false;
+  var fileHandle = null;
+
+  var btnTgl  = document.getElementById("edit-toggle");
+  var btnSave = document.getElementById("edit-save");
+  var btnCncl = document.getElementById("edit-cancel");
+  var btnLink = document.getElementById("edit-link");
+  var page    = document.getElementById("top");
+
+  var le       = document.getElementById("link-editor");
+  var leText   = document.getElementById("link-editor-text");
+  var leInput  = document.getElementById("link-editor-input");
+  var leApply  = document.getElementById("link-editor-apply");
+  var leUnlink = document.getElementById("link-editor-unlink");
+  var leClose  = document.getElementById("link-editor-close");
+  var curLink  = null;
+
+  function texts() {
+    try { return JSON.parse(localStorage.getItem(TXT_KEY) || "{}") || {}; } catch (e) { return {}; }
+  }
+  function saveTexts(t) { try { localStorage.setItem(TXT_KEY, JSON.stringify(t)); } catch (e) {} }
+
+  // 保存済みテキストを起動時に反映
+  (function applySaved() {
+    var t = texts();
+    document.querySelectorAll("[data-eid]").forEach(function (el) {
+      var id = el.getAttribute("data-eid");
+      if (Object.prototype.hasOwnProperty.call(t, id)) el.innerHTML = t[id];
+    });
+  })();
+
+  function toast(msg) {
+    var t = document.getElementById("cmt-toast");
+    if (!t) { alert(msg); return; }
+    t.textContent = msg; t.classList.add("show");
+    setTimeout(function () { t.classList.remove("show"); }, 2000);
+  }
+  function short(s) { s = (s || "").trim() || "（空）"; return s.length > 40 ? s.slice(0, 40) + "…" : s; }
+
+  var editEls = function () { return document.querySelectorAll("[data-eid]"); };
+
+  function setEditable(on) {
+    editEls().forEach(function (el) {
+      if (on) el.setAttribute("contenteditable", "true");
+      else el.removeAttribute("contenteditable");
+      el.querySelectorAll("a").forEach(function (a) {
+        if (on) a.setAttribute("data-noclick", "1"); else a.removeAttribute("data-noclick");
+      });
+    });
+  }
+
+  // フォーカス時の値を記録 → blurで差分を履歴に記録
+  document.addEventListener("focusin", function (ev) {
+    if (!editing) return;
+    var el = ev.target.closest && ev.target.closest("[data-eid]");
+    if (el) el.__orig = el.textContent.trim();
+  });
+  document.addEventListener("focusout", function (ev) {
+    if (!editing) return;
+    var el = ev.target.closest && ev.target.closest("[data-eid]");
+    if (!el) return;
+    var oldT = (el.__orig || "").trim();
+    var newT = el.textContent.trim();
+    if (oldT !== newT) {
+      var t = texts(); t[el.getAttribute("data-eid")] = el.innerHTML; saveTexts(t);
+      EditHistory.log("テキスト", (el.getAttribute("data-elabel") || "本文") + "：「" + short(oldT) + "」→「" + short(newT) + "」");
+    }
+  });
+
+  // 編集中：リンククリックで編集ポップオーバー
+  document.addEventListener("click", function (ev) {
+    if (!editing) return;
+    var a = ev.target.closest && ev.target.closest("[data-eid] a");
+    if (a) { ev.preventDefault(); openLinkEditor(a); return; }
+    if (le.classList.contains("show") &&
+        !(ev.target.closest && ev.target.closest("#link-editor")) &&
+        !(ev.target.closest && ev.target.closest("#tool-bar"))) {
+      closeLinkEditor();
+    }
+  }, true);
+
+  function openLinkEditor(a) {
+    curLink = a;
+    leText.textContent = "テキスト：" + ((a.textContent || "").trim() || "（なし）");
+    leInput.value = a.getAttribute("href") || "";
+    le.classList.add("show");
+    var r = a.getBoundingClientRect();
+    var top = r.bottom + window.scrollY + 6;
+    var left = r.left + window.scrollX;
+    var maxLeft = window.scrollX + document.documentElement.clientWidth - le.offsetWidth - 12;
+    if (left > maxLeft) left = Math.max(window.scrollX + 8, maxLeft);
+    le.style.top = top + "px"; le.style.left = left + "px";
+    leInput.focus(); leInput.select();
+  }
+  function closeLinkEditor() { le.classList.remove("show"); curLink = null; }
+
+  leApply.addEventListener("click", function () {
+    if (!curLink) return;
+    var v = leInput.value.trim();
+    if (!v) { toast("URLを入力してください"); return; }
+    var old = curLink.getAttribute("href") || "（なし）";
+    curLink.setAttribute("href", v);
+    if (!curLink.getAttribute("target")) curLink.setAttribute("target", "_blank");
+    if (!curLink.getAttribute("rel")) curLink.setAttribute("rel", "noopener");
+    persistHost(curLink);
+    EditHistory.log("テキスト", "リンク先を変更：「" + short(old) + "」→「" + short(v) + "」");
+    toast("リンク先を更新しました"); closeLinkEditor();
+  });
+  leUnlink.addEventListener("click", function () {
+    if (!curLink) return;
+    var txt = curLink.textContent;
+    var host = curLink.closest("[data-eid]");
+    curLink.parentNode.replaceChild(document.createTextNode(txt), curLink);
+    if (host) persistHost(host);
+    EditHistory.log("テキスト", "リンクを解除：「" + short(txt) + "」");
+    toast("リンクを解除しました"); closeLinkEditor();
+  });
+  leClose.addEventListener("click", closeLinkEditor);
+  leInput.addEventListener("keydown", function (e) {
+    if (e.key === "Enter") { e.preventDefault(); leApply.click(); }
+    else if (e.key === "Escape") { e.preventDefault(); closeLinkEditor(); }
+  });
+
+  function persistHost(node) {
+    var host = node.closest ? node.closest("[data-eid]") : null;
+    if (!host) return;
+    var t = texts(); t[host.getAttribute("data-eid")] = host.innerHTML; saveTexts(t);
+  }
+
+  // 選択テキストをリンク化
+  btnLink.addEventListener("click", function () {
+    var sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !sel.toString().trim()) { toast("リンク化するテキストを選択してください"); return; }
+    var node = sel.anchorNode;
+    var el = node && (node.nodeType === 1 ? node : node.parentNode);
+    if (!el || !el.closest || !el.closest("[data-eid]")) { toast("編集可能な本文内のテキストを選択してください"); return; }
+    var url = prompt("リンク先URLを入力してください", "https://");
+    if (!url) return;
+    var txt = sel.toString();
+    document.execCommand("createLink", false, url);
+    persistHost(el);
+    EditHistory.log("テキスト", "テキストをリンク化：「" + short(txt) + "」→ " + short(url));
+    toast("選択テキストをリンク化しました（クリックでURL編集可）");
+  });
+
+  function enter() {
+    editing = true;
+    document.body.classList.add("edit-active");
+    btnTgl.classList.add("on");
+    btnTgl.textContent = "✏️ テキスト編集：ON";
+    setEditable(true);
+    toast("編集モード：本文をクリックで編集／リンクをクリックでURL編集");
+  }
+  function leave() {
+    editing = false;
+    closeLinkEditor();
+    setEditable(false);
+    document.body.classList.remove("edit-active");
+    btnTgl.classList.remove("on");
+    btnTgl.textContent = "✏️ テキスト編集：OFF";
+  }
+
+  // ---- HTMLとして保存（共有・バックアップ用） ----
+  function serialize() {
+    var clone = document.documentElement.cloneNode(true);
+    clone.querySelectorAll(".cmt-pin").forEach(function (p) { p.parentNode.removeChild(p); });
+    clone.querySelectorAll("[contenteditable]").forEach(function (e) { e.removeAttribute("contenteditable"); });
+    clone.querySelectorAll("[data-noclick]").forEach(function (e) { e.removeAttribute("data-noclick"); });
+    var b = clone.querySelector("body"); if (b) b.classList.remove("cmt-active", "edit-active");
+    var cp = clone.querySelector("#cmt-panel"); if (cp) cp.classList.remove("open");
+    var hp = clone.querySelector("#hist-panel"); if (hp) hp.classList.remove("open");
+    var cb = clone.querySelector("#cmt-badge"); if (cb) cb.textContent = "0";
+    var cl = clone.querySelector("#cmt-list"); if (cl) cl.innerHTML = "";
+    var hl = clone.querySelector("#hist-list"); if (hl) hl.innerHTML = "";
+    var tb = clone.querySelector("#att-body"); if (tb) tb.innerHTML = "<!-- 行はJSで生成 -->";
+    var te = clone.querySelector("#cmt-toast"); if (te) { te.textContent = ""; te.classList.remove("show"); }
+    var le2 = clone.querySelector("#link-editor");
+    if (le2) { le2.classList.remove("show"); le2.removeAttribute("style");
+               var t2 = le2.querySelector("#link-editor-text"); if (t2) t2.textContent = ""; }
+    return "<!DOCTYPE html>\n" + clone.outerHTML + "\n";
+  }
+  function downloadHTML(html) {
+    var blob = new Blob([html], { type: "text/html;charset=utf-8" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a"); a.href = url; a.download = FILENAME;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    toast("HTMLをダウンロードしました");
+  }
+  function saveHTML() {
+    var html = serialize();
+    if (window.showSaveFilePicker) {
+      (async function () {
+        try {
+          if (!fileHandle) {
+            fileHandle = await window.showSaveFilePicker({
+              suggestedName: FILENAME,
+              types: [{ description: "HTML", accept: { "text/html": [".html"] } }]
+            });
+          }
+          var w = await fileHandle.createWritable();
+          await w.write(html); await w.close();
+          toast("ファイルに保存しました");
+        } catch (e) {
+          if (e && e.name === "AbortError") { toast("保存をキャンセルしました"); return; }
+          downloadHTML(html);
+        }
+      })();
+    } else { downloadHTML(html); }
+  }
+
+  btnTgl.addEventListener("click", function () { editing ? leave() : enter(); });
+  btnSave.addEventListener("click", saveHTML);
+  btnCncl.addEventListener("click", leave);
+})();
+</script>
+
+<script>
+/* ================= コメント機能（ピン＋Markdown出力） ================= */
+(function () {
+  "use strict";
+  var DOC = "陳さん送別会_出席者管理.html";
+  var KEY = "cm-comments::" + DOC;
+  var comments = [];
+  var selId = null;
+  var addMode = false;
+
+  function load() {
+    try { comments = JSON.parse(localStorage.getItem(KEY) || "[]"); }
+    catch (e) { comments = []; }
+    if (!Array.isArray(comments)) comments = [];
+  }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(comments)); } catch (e) {} }
+  function uid() { return "c" + Math.abs((Date.now() % 1e7)) + "-" + Math.floor(performance.now() * 1000 % 1e6); }
+
+  var fab    = document.getElementById("cmt-fab");
+  var badge  = document.getElementById("cmt-badge");
+  var panel  = document.getElementById("cmt-panel");
+  var listEl = document.getElementById("cmt-list");
+  var btnClose = document.getElementById("cmt-close");
+  var btnMode  = document.getElementById("cmt-mode");
+  var btnCopy  = document.getElementById("cmt-copy");
+  var btnDl    = document.getElementById("cmt-download");
+  var btnClear = document.getElementById("cmt-clear");
+  var toastEl  = document.getElementById("cmt-toast");
+
+  function toast(msg) {
+    toastEl.textContent = msg; toastEl.classList.add("show");
+    setTimeout(function () { toastEl.classList.remove("show"); }, 1800);
+  }
+  function nearestPage(el) {
+    while (el && el !== document.body) {
+      if (el.classList && el.classList.contains("page")) return el;
+      el = el.parentNode;
+    }
+    return null;
+  }
+  function sectionLabel(el) {
+    var node = el;
+    while (node && node !== document.body) {
+      if (node.classList && node.classList.contains("secttl")) return node.textContent.trim();
+      if (node.classList && node.classList.contains("info"))   return "開催概要";
+      node = node.parentNode;
+    }
+    var page = nearestPage(el);
+    if (page) { var h = page.querySelector("h1"); if (h) return h.textContent.trim(); }
+    return "（不明な箇所）";
+  }
+  function clearPins() {
+    document.querySelectorAll(".cmt-pin").forEach(function (p) { p.parentNode.removeChild(p); });
+  }
+  function renderPins() {
+    clearPins();
+    comments.forEach(function (c, idx) {
+      var page = document.getElementById(c.pageId);
+      if (!page) return;
+      var pin = document.createElement("div");
+      pin.className = "cmt-pin" + (c.done ? " done" : "") + (c.id === selId ? " sel" : "");
+      pin.textContent = (idx + 1);
+      pin.style.left = c.xpct + "%"; pin.style.top = c.ypct + "%";
+      pin.title = "#" + (idx + 1) + " " + c.section;
+      pin.addEventListener("click", function (ev) {
+        ev.stopPropagation(); selId = c.id; openPanel(); renderAll(); scrollToItem(c.id);
+      });
+      page.appendChild(pin);
+    });
+  }
+  function renderList() {
+    listEl.innerHTML = "";
+    if (!comments.length) {
+      var e = document.createElement("div");
+      e.className = "empty";
+      e.textContent = "コメントはまだありません。「コメント追加：ON」でページ上をクリックして追加してください。";
+      listEl.appendChild(e); return;
+    }
+    comments.forEach(function (c, idx) {
+      var item = document.createElement("div");
+      item.className = "cmt-item" + (c.done ? " done" : "") + (c.id === selId ? " sel" : "");
+      var top = document.createElement("div"); top.className = "top";
+      var nm = document.createElement("span"); nm.className = "nm"; nm.textContent = (idx + 1);
+      var sec = document.createElement("span"); sec.className = "sec"; sec.textContent = c.section;
+      sec.addEventListener("click", function () { focusPin(c.id); });
+      top.appendChild(nm); top.appendChild(sec); item.appendChild(top);
+      var meta = document.createElement("div"); meta.className = "meta";
+      meta.textContent = "位置 左" + Math.round(c.xpct) + "% 上" + Math.round(c.ypct) + "%";
+      item.appendChild(meta);
+      var ta = document.createElement("textarea");
+      ta.value = c.text || ""; ta.placeholder = "メモ・依頼内容を記入…";
+      ta.addEventListener("input", function () { c.text = ta.value; save(); });
+      item.appendChild(ta);
+      var acts = document.createElement("div"); acts.className = "acts";
+      var bd = document.createElement("button"); bd.className = "done";
+      bd.textContent = c.done ? "未対応に戻す" : "対応済み";
+      bd.addEventListener("click", function () { c.done = !c.done; save(); renderAll(); });
+      var bdel = document.createElement("button"); bdel.className = "del"; bdel.textContent = "削除";
+      bdel.addEventListener("click", function () {
+        comments = comments.filter(function (x) { return x.id !== c.id; });
+        if (selId === c.id) selId = null; save(); renderAll();
+      });
+      acts.appendChild(bd); acts.appendChild(bdel); item.appendChild(acts);
+      listEl.appendChild(item);
+    });
+  }
+  function renderAll() { badge.textContent = comments.length; renderPins(); renderList(); }
+  function scrollToItem(id) {
+    var items = listEl.querySelectorAll(".cmt-item"), el = null;
+    comments.forEach(function (c, i) { if (c.id === id) el = items[i]; });
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+  function focusPin(id) {
+    var c = comments.filter(function (x) { return x.id === id; })[0];
+    if (!c) return;
+    var page = document.getElementById(c.pageId);
+    if (page) page.scrollIntoView({ behavior: "smooth", block: "start" });
+    selId = id; renderAll();
+  }
+  function openPanel() { panel.classList.add("open"); }
+  function togglePanel() { panel.classList.toggle("open"); }
+  function setMode(on) {
+    addMode = on;
+    btnMode.textContent = "コメント追加：" + (on ? "ON" : "OFF");
+    btnMode.classList.toggle("on", on);
+    document.body.classList.toggle("cmt-active", on);
+  }
+
+  document.addEventListener("click", function (ev) {
+    if (!addMode) return;
+    if (ev.target.closest("#cmt-panel") || ev.target.closest("#cmt-fab") ||
+        ev.target.closest("#cmt-toast") || ev.target.classList.contains("cmt-pin")) return;
+    var page = nearestPage(ev.target);
+    if (!page || !page.id) return;
+    var rect = page.getBoundingClientRect();
+    var xpct = ((ev.clientX - rect.left) / rect.width) * 100;
+    var ypct = ((ev.clientY - rect.top) / rect.height) * 100;
+    xpct = Math.max(1, Math.min(99, xpct));
+    ypct = Math.max(0.5, Math.min(99.5, ypct));
+    var c = { id: uid(), pageId: page.id, section: sectionLabel(ev.target), xpct: xpct, ypct: ypct, text: "", done: false };
+    comments.push(c); selId = c.id; save(); openPanel(); renderAll();
+    setTimeout(function () {
+      var items = listEl.querySelectorAll(".cmt-item textarea");
+      var el = items[comments.length - 1];
+      if (el) { el.scrollIntoView({ block: "center" }); el.focus(); }
+    }, 30);
+  }, true);
+
+  function buildMarkdown() {
+    var lines = ["# 陳さんの送別会（リスクPJ）出席者管理 — コメント", "", "- 対象ファイル: `" + DOC + "`", "- コメント件数: " + comments.length, ""];
+    comments.forEach(function (c, idx) {
+      lines.push("## #" + (idx + 1) + "　" + c.section + (c.done ? "　[対応済み]" : ""));
+      lines.push("- 概略位置 左" + Math.round(c.xpct) + "% 上" + Math.round(c.ypct) + "%");
+      lines.push("- コメント: " + (c.text ? c.text : "（未記入）"));
+      lines.push("");
+    });
+    return lines.join("\n");
+  }
+  function copyText(txt) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(txt).then(function () { toast("コメントをコピーしました"); }, function () { fallbackCopy(txt); });
+    } else { fallbackCopy(txt); }
+  }
+  function fallbackCopy(txt) {
+    var ta = document.createElement("textarea");
+    ta.value = txt; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand("copy"); toast("コメントをコピーしました"); } catch (e) { toast("コピーに失敗しました"); }
+    document.body.removeChild(ta);
+  }
+  function download(txt) {
+    var blob = new Blob([txt], { type: "text/markdown;charset=utf-8" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a"); a.href = url; a.download = "陳さん送別会_出席者管理_コメント.md";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    toast("Markdownをダウンロードしました");
+  }
+
+  fab.addEventListener("click", togglePanel);
+  btnClose.addEventListener("click", function () { panel.classList.remove("open"); });
+  btnMode.addEventListener("click", function () { setMode(!addMode); });
+  btnCopy.addEventListener("click", function () { if (!comments.length) { toast("コメントがありません"); return; } copyText(buildMarkdown()); });
+  btnDl.addEventListener("click", function () { if (!comments.length) { toast("コメントがありません"); return; } download(buildMarkdown()); });
+  btnClear.addEventListener("click", function () {
+    if (!comments.length) { toast("コメントがありません"); return; }
+    if (confirm("コメントをすべて削除します。よろしいですか？")) { comments = []; selId = null; save(); renderAll(); toast("コメントを全消去しました"); }
+  });
+
+  var rzTimer = null;
+  window.addEventListener("resize", function () { clearTimeout(rzTimer); rzTimer = setTimeout(renderPins, 150); });
+
+  load(); renderAll();
+})();
+</script>
+
+</body>
+</html>
