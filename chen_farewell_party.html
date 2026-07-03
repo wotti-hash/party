@@ -129,7 +129,7 @@
     /* 下部ツールバー：小さめ＆折返し、コメントFABと重ならないよう幅制限 */
     #tool-bar { left: 10px; right: 64px; bottom: 10px; gap: 6px; }
     #tool-bar button { font-size: 12px; padding: 9px 12px; border-radius: 20px; }
-    #save-note { font-size: 10.5px; padding: 5px 9px; }
+    #save-note, #sync-note { font-size: 10.5px; padding: 5px 9px; }
     #cmt-fab { right: 10px; bottom: 10px; padding: 11px 14px; font-size: 13px; }
     #cmt-toast { right: 10px; bottom: 64px; }
   }
@@ -174,6 +174,7 @@
   #hist-btn .badge { display: inline-block; min-width: 18px; height: 18px; line-height: 18px; text-align: center;
                      background: #E8910C; color: #fff; border-radius: 9px; font-size: 11px; margin-left: 6px; padding: 0 5px; }
   #save-note { font-size: 11.5px; color: #2E7D46; background: #eef8f1; border: 1px solid #cfe8d7; border-radius: 20px; padding: 6px 12px; }
+  #sync-note { font-size: 11.5px; color: #777; background: #f1f3f5; border: 1px solid #dde2e6; border-radius: 20px; padding: 6px 12px; }
 
   /* ============ 変更履歴パネル（左からスライド） ============ */
   #hist-panel { position: fixed; top: 0; left: 0; height: 100vh; width: 400px; max-width: 94vw;
@@ -335,6 +336,7 @@
   <button id="edit-cancel">編集終了</button>
   <button id="hist-btn">📝 変更履歴<span class="badge" id="hist-badge">0</span></button>
   <span id="save-note">自動保存：ON</span>
+  <span id="sync-note">☁ クラウド同期：接続中…</span>
 </div>
 
 <!-- リンク編集ポップオーバー -->
@@ -382,6 +384,126 @@
 <div id="cmt-toast"></div>
 
 <script>
+/* ================= クラウド同期（Firebase Realtime Database） =================
+   出席者・テキスト/リンク・コメント・履歴を party/chen_farewell/ 配下に保存し、
+   全端末でリアルタイム共有する。各モジュールは
+     PartyDB.register(key, applyRemoteFn, getStateFn)  … 起動時に登録
+     PartyDB.push(key, value)                          … 変更時に送信
+   を使う。オフライン時やFirebase未接続時は従来どおり localStorage で動作。      */
+window.PartyDB = (function () {
+  "use strict";
+  var ROOM = "party/chen_farewell";
+  var SDK  = "https://www.gstatic.com/firebasejs/10.12.2/";
+  // toieba-game と同じFirebaseプロジェクトのRealtime Databaseを再利用（APIキーはWeb公開前提）
+  var firebaseConfig = {
+    apiKey: "AIzaSyDML1qE08Wk3Yah_e35PqGOlXlKEX5-wLc",
+    authDomain: "toieba-game.firebaseapp.com",
+    databaseURL: "https://toieba-game-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "toieba-game",
+    storageBucket: "toieba-game.firebasestorage.app",
+    messagingSenderId: "987291900786",
+    appId: "1:987291900786:web:dc0430a21c1995c4b3dbeb"
+  };
+
+  var db = null, connected = false;
+  var handlers = {};    // key -> applyRemote(value)
+  var getters  = {};    // key -> getState()
+  var localCache = {};  // key -> 直近のJSON文字列（エコー判定用）
+  var pending = {};     // key -> 編集終了後に反映する値
+  var timers = {};      // key -> 送信デバウンス
+  var statusEl = null;
+
+  function isEditing() {
+    var a = document.activeElement;
+    if (!a) return false;
+    if (a.isContentEditable) return true;
+    var t = a.tagName;
+    return (t === "INPUT" || t === "SELECT" || t === "TEXTAREA");
+  }
+
+  function register(key, applyFn, getFn) { handlers[key] = applyFn; getters[key] = getFn; }
+
+  function push(key, value) {
+    var json = JSON.stringify(value === undefined ? null : value);
+    localCache[key] = json;              // 先にキャッシュ更新（自分の書込みのエコーを無視するため）
+    clearTimeout(timers[key]);
+    timers[key] = setTimeout(function () {
+      if (db && connected) db.ref(ROOM + "/" + key).set(value).catch(function () {});
+    }, 350);
+  }
+
+  function applyRemote(key, value) {
+    var json = JSON.stringify(value === undefined ? null : value);
+    if (json === localCache[key]) return;        // 変化なし／自分の書込みのエコー
+    if (isEditing()) { pending[key] = value; return; }  // 編集中は保留
+    localCache[key] = json;
+    if (handlers[key]) handlers[key](value);
+  }
+
+  // 編集終了時に保留分を反映
+  document.addEventListener("focusout", function () {
+    setTimeout(function () {
+      if (isEditing()) return;
+      Object.keys(pending).forEach(function (k) {
+        var v = pending[k]; delete pending[k];
+        localCache[k] = JSON.stringify(v === undefined ? null : v);
+        if (handlers[k]) handlers[k](v);
+      });
+    }, 200);
+  }, true);
+
+  function setStatus(txt, color) { if (statusEl) { statusEl.textContent = txt; statusEl.style.color = color || ""; } }
+
+  function loadScript(src, cb) {
+    var s = document.createElement("script");
+    s.src = src; s.async = true; s.onload = cb;
+    s.onerror = function () { setStatus("クラウド同期：読込失敗（ローカル保存のみ）", "#C62828"); };
+    document.head.appendChild(s);
+  }
+
+  function connect() {
+    statusEl = document.getElementById("sync-note");
+    // 各キーの初期値をキャッシュに取り込む（クラウド未登録時のseed用）
+    Object.keys(getters).forEach(function (key) {
+      try { localCache[key] = JSON.stringify(getters[key]()); } catch (e) {}
+    });
+    loadScript(SDK + "firebase-app-compat.js", function () {
+      loadScript(SDK + "firebase-database-compat.js", function () {
+        try {
+          if (!firebase.apps || !firebase.apps.length) firebase.initializeApp(firebaseConfig);
+          db = firebase.database();
+          db.ref(".info/connected").on("value", function (s) {
+            connected = !!(s && s.val());
+            setStatus(connected ? "☁ クラウド同期：接続中" : "☁ クラウド同期：オフライン", connected ? "#2E7D46" : "#C62828");
+          });
+          Object.keys(handlers).forEach(function (key) {
+            db.ref(ROOM + "/" + key).on("value", function (snap) {
+              var v = snap.val();
+              if (v === null) {
+                // クラウドに未登録：手元に意味のあるデータがあれば初期投入
+                var lc = localCache[key];
+                if (lc && lc !== "null" && lc !== "[]" && lc !== "{}") {
+                  try { db.ref(ROOM + "/" + key).set(JSON.parse(lc)).catch(function () {}); } catch (e) {}
+                }
+                return;
+              }
+              applyRemote(key, v);
+            });
+          });
+        } catch (e) { setStatus("☁ クラウド同期：接続エラー（ローカル保存のみ）", "#C62828"); }
+      });
+    });
+  }
+
+  // モジュールの register 完了後に接続
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", connect);
+  else setTimeout(connect, 0);
+
+  return { register: register, push: push };
+})();
+</script>
+
+<script>
 /* ================= 変更履歴ストア（共通） ================= */
 window.EditHistory = (function () {
   "use strict";
@@ -407,6 +529,7 @@ window.EditHistory = (function () {
   function log(cat, desc) {
     items.push({ ts: nowStr(), cat: cat, d: desc });
     persist(); render();
+    if (window.PartyDB) PartyDB.push("history", items);
   }
   function render() {
     badge.textContent = items.length;
@@ -441,7 +564,7 @@ window.EditHistory = (function () {
     return lines.join("\n");
   }
   function all() { return items; }
-  function clearAll() { items = []; persist(); render(); }
+  function clearAll() { items = []; persist(); render(); if (window.PartyDB) PartyDB.push("history", items); }
 
   // ---- パネル操作 ----
   document.getElementById("hist-btn").addEventListener("click", function () { panel.classList.toggle("open"); });
@@ -481,6 +604,12 @@ window.EditHistory = (function () {
   }
 
   render();
+
+  // クラウド同期：リモート更新を受けたら反映（自分の変更は push で送信）
+  if (window.PartyDB) PartyDB.register("history",
+    function (v) { items = Array.isArray(v) ? v : []; persist(); render(); },
+    function () { return items; });
+
   return { log: log, render: render, all: all, clearAll: clearAll, buildMarkdown: buildMarkdown };
 })();
 </script>
@@ -512,6 +641,7 @@ window.EditHistory = (function () {
   }
   function save() {
     try { localStorage.setItem(KEY, JSON.stringify(rows)); flashSaved(); } catch (e) {}
+    if (window.PartyDB) PartyDB.push("attendees", rows);
   }
   var savedTimer = null;
   function flashSaved() {
@@ -677,6 +807,16 @@ window.EditHistory = (function () {
   }
 
   render();
+
+  // クラウド同期：リモートの出席者データを受けたら反映
+  if (window.PartyDB) PartyDB.register("attendees",
+    function (v) {
+      if (!Array.isArray(v)) return;
+      rows = v;
+      try { localStorage.setItem(KEY, JSON.stringify(rows)); } catch (e) {}
+      render();
+    },
+    function () { return rows; });
 })();
 </script>
 
@@ -706,7 +846,10 @@ window.EditHistory = (function () {
   function texts() {
     try { return JSON.parse(localStorage.getItem(TXT_KEY) || "{}") || {}; } catch (e) { return {}; }
   }
-  function saveTexts(t) { try { localStorage.setItem(TXT_KEY, JSON.stringify(t)); } catch (e) {} }
+  function saveTexts(t) {
+    try { localStorage.setItem(TXT_KEY, JSON.stringify(t)); } catch (e) {}
+    if (window.PartyDB) PartyDB.push("texts", t);
+  }
 
   // 保存済みテキストを起動時に反映
   (function applySaved() {
@@ -900,6 +1043,18 @@ window.EditHistory = (function () {
   btnTgl.addEventListener("click", function () { editing ? leave() : enter(); });
   btnSave.addEventListener("click", saveHTML);
   btnCncl.addEventListener("click", leave);
+
+  // クラウド同期：リモートのテキスト/リンク編集を受けたらDOMへ反映
+  if (window.PartyDB) PartyDB.register("texts",
+    function (v) {
+      v = v || {};
+      try { localStorage.setItem(TXT_KEY, JSON.stringify(v)); } catch (e) {}
+      document.querySelectorAll("[data-eid]").forEach(function (el) {
+        var id = el.getAttribute("data-eid");
+        if (Object.prototype.hasOwnProperty.call(v, id) && el.innerHTML !== v[id]) el.innerHTML = v[id];
+      });
+    },
+    function () { return texts(); });
 })();
 </script>
 
@@ -918,7 +1073,7 @@ window.EditHistory = (function () {
     catch (e) { comments = []; }
     if (!Array.isArray(comments)) comments = [];
   }
-  function save() { try { localStorage.setItem(KEY, JSON.stringify(comments)); } catch (e) {} }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(comments)); } catch (e) {} if (window.PartyDB) PartyDB.push("comments", comments); }
   function uid() { return "c" + Math.abs((Date.now() % 1e7)) + "-" + Math.floor(performance.now() * 1000 % 1e6); }
 
   var fab    = document.getElementById("cmt-fab");
@@ -1096,6 +1251,15 @@ window.EditHistory = (function () {
   window.addEventListener("resize", function () { clearTimeout(rzTimer); rzTimer = setTimeout(renderPins, 150); });
 
   load(); renderAll();
+
+  // クラウド同期：リモートのコメントを受けたら反映
+  if (window.PartyDB) PartyDB.register("comments",
+    function (v) {
+      comments = Array.isArray(v) ? v : [];
+      try { localStorage.setItem(KEY, JSON.stringify(comments)); } catch (e) {}
+      renderAll();
+    },
+    function () { return comments; });
 })();
 </script>
 
