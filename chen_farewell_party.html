@@ -51,9 +51,14 @@
   /* ===== 出席者テーブル ===== */
   table.att { border-collapse: collapse; width: 100%; margin: 4px 0 12px; font-size: 13px; }
   table.att th { background: #E3F2FD; color: #005A9E; text-align: left; padding: 8px 10px; border: 1px solid #cfe0ee; white-space: nowrap; }
+  table.att th.sortable { cursor: pointer; user-select: none; }
+  table.att th.sortable:hover { background: #d3e8fb; }
+  table.att th .ar { font-size: 10px; margin-left: 4px; color: #a9c4de; vertical-align: middle; }
+  table.att th.sorted { background: #cfe4fa; }
+  table.att th.sorted .ar { color: #005A9E; }
   table.att td { padding: 6px 8px; border: 1px solid #e2e8f0; color: #444; vertical-align: middle; }
   table.att tr:nth-child(even) td { background: #fcfdff; }
-  table.att .no { text-align: center; width: 34px; color: #888; font-weight: 700; }
+  table.att .no { text-align: center; width: 48px; color: #888; font-weight: 700; }
   table.att .del { text-align: center; width: 40px; }
 
   /* テーブル内の常時編集セル */
@@ -304,12 +309,12 @@
   <table class="att" id="att-table">
     <thead>
       <tr>
-        <th class="no">#</th>
-        <th style="min-width:130px;">名前</th>
-        <th style="min-width:150px;">会社名(IBMor総研)</th>
-        <th class="chk-cell">声がけ済</th>
-        <th style="width:110px;">出欠</th>
-        <th style="min-width:160px;">備考</th>
+        <th class="sortable no" data-key="no" title="元の順に戻す">#<span class="ar">↕</span></th>
+        <th class="sortable" data-key="name" style="min-width:130px;">名前<span class="ar">↕</span></th>
+        <th class="sortable" data-key="company" style="min-width:150px;">会社名(IBMor総研)<span class="ar">↕</span></th>
+        <th class="sortable chk-cell" data-key="asked">声がけ済<span class="ar">↕</span></th>
+        <th class="sortable" data-key="status" style="width:110px;">出欠<span class="ar">↕</span></th>
+        <th class="sortable" data-key="note" style="min-width:160px;">備考<span class="ar">↕</span></th>
         <th class="del">削除</th>
       </tr>
     </thead>
@@ -652,9 +657,44 @@ window.EditHistory = (function () {
   function esc(s) { return (s == null ? "" : String(s)); }
   function rowLabel(i, r) { return "出席者#" + (i + 1) + "（" + (r.name && r.name.trim() ? r.name.trim() : "未入力") + "）"; }
 
+  // ---- 並び替え（表示のみ・データ順やクラウド同期は変更しない） ----
+  // key: 並び替え対象の列 / dir: 1=昇順, -1=降順 / null=元の入力順
+  var sortState = { key: null, dir: 1 };
+  var STATUS_RANK = { "出席": 0, "未定": 1, "欠席": 2 };
+
+  function sortedView() {
+    if (!sortState.key) return rows.slice();
+    var k = sortState.key, dir = sortState.dir;
+    return rows.slice().sort(function (a, b) {
+      if (k === "no") { return (rows.indexOf(a) - rows.indexOf(b)) * dir; }  // 元の入力順
+      if (k === "asked") { return ((a.asked ? 0 : 1) - (b.asked ? 0 : 1)) * dir; }
+      if (k === "status") {
+        var ar = (STATUS_RANK[a.status] == null ? 9 : STATUS_RANK[a.status]);
+        var br = (STATUS_RANK[b.status] == null ? 9 : STATUS_RANK[b.status]);
+        return (ar - br) * dir;
+      }
+      // テキスト列（名前・会社名・備考）：空欄は昇順降順にかかわらず末尾へ
+      var av = (a[k] || "").trim(), bv = (b[k] || "").trim();
+      if (!av && !bv) return 0;
+      if (!av) return 1;
+      if (!bv) return -1;
+      return av.localeCompare(bv, "ja") * dir;
+    });
+  }
+
+  function updateSortIndicators() {
+    document.querySelectorAll("#att-table th.sortable").forEach(function (th) {
+      var ar = th.querySelector(".ar");
+      var active = (th.getAttribute("data-key") === sortState.key);
+      th.classList.toggle("sorted", active);
+      if (ar) ar.textContent = active ? (sortState.dir === 1 ? "▲" : "▼") : "↕";
+    });
+  }
+
   function render() {
     body.innerHTML = "";
-    rows.forEach(function (r, i) {
+    sortedView().forEach(function (r) {
+      var i = rows.indexOf(r);   // 元の入力順の位置＝安定したNo.（並び替えても不変）
       var tr = document.createElement("tr");
 
       var tdNo = document.createElement("td");
@@ -705,7 +745,9 @@ window.EditHistory = (function () {
       bd.className = "btn del"; bd.textContent = "×"; bd.title = "この行を削除";
       bd.addEventListener("click", function () {
         var label = rowLabel(i, r);
-        rows.splice(i, 1); save(); render(); updateSummary();
+        var idx = rows.indexOf(r);
+        if (idx >= 0) rows.splice(idx, 1);
+        save(); render(); updateSummary();
         EditHistory.log("行", "行を削除：" + label);
       });
       tdDel.appendChild(bd);
@@ -748,6 +790,18 @@ window.EditHistory = (function () {
     document.getElementById("c-absent").textContent  = valid.filter(function (r) { return r.status === "欠席"; }).length;
     document.getElementById("c-pending").textContent = valid.filter(function (r) { return r.status === "未定"; }).length;
   }
+
+  // ヘッダークリックで並び替え（同じ列を再クリックで昇順⇄降順、表示のみ）
+  var thead = document.querySelector("#att-table thead");
+  if (thead) thead.addEventListener("click", function (e) {
+    var th = e.target.closest("th.sortable");
+    if (!th) return;
+    var k = th.getAttribute("data-key");
+    if (sortState.key === k) sortState.dir = -sortState.dir;
+    else { sortState.key = k; sortState.dir = 1; }
+    render();
+    updateSortIndicators();
+  });
 
   document.getElementById("add-row").addEventListener("click", function () {
     rows.push({ name: "", company: "", asked: false, status: "未定", note: "" });
@@ -807,6 +861,7 @@ window.EditHistory = (function () {
   }
 
   render();
+  updateSortIndicators();
 
   // クラウド同期：リモートの出席者データを受けたら反映
   if (window.PartyDB) PartyDB.register("attendees",
