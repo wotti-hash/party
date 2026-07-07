@@ -466,6 +466,32 @@ window.PartyDB = (function () {
     document.head.appendChild(s);
   }
 
+  // 匿名認証成立後に呼ばれ、DB接続とリスナー登録を行う（二重実行はガード）
+  function setupDb() {
+    if (db) return;
+    try {
+      db = firebase.database();
+      db.ref(".info/connected").on("value", function (s) {
+        connected = !!(s && s.val());
+        setStatus(connected ? "☁ クラウド同期：接続中" : "☁ クラウド同期：オフライン", connected ? "#2E7D46" : "#C62828");
+      });
+      Object.keys(handlers).forEach(function (key) {
+        db.ref(ROOM + "/" + key).on("value", function (snap) {
+          var v = snap.val();
+          if (v === null) {
+            // クラウドに未登録：手元に意味のあるデータがあれば初期投入
+            var lc = localCache[key];
+            if (lc && lc !== "null" && lc !== "[]" && lc !== "{}") {
+              try { db.ref(ROOM + "/" + key).set(JSON.parse(lc)).catch(function () {}); } catch (e) {}
+            }
+            return;
+          }
+          applyRemote(key, v);
+        });
+      });
+    } catch (e) { setStatus("☁ クラウド同期：接続エラー（ローカル保存のみ）", "#C62828"); }
+  }
+
   function connect() {
     statusEl = document.getElementById("sync-note");
     // 各キーの初期値をキャッシュに取り込む（クラウド未登録時のseed用）
@@ -473,29 +499,17 @@ window.PartyDB = (function () {
       try { localCache[key] = JSON.stringify(getters[key]()); } catch (e) {}
     });
     loadScript(SDK + "firebase-app-compat.js", function () {
-      loadScript(SDK + "firebase-database-compat.js", function () {
-        try {
-          if (!firebase.apps || !firebase.apps.length) firebase.initializeApp(firebaseConfig);
-          db = firebase.database();
-          db.ref(".info/connected").on("value", function (s) {
-            connected = !!(s && s.val());
-            setStatus(connected ? "☁ クラウド同期：接続中" : "☁ クラウド同期：オフライン", connected ? "#2E7D46" : "#C62828");
-          });
-          Object.keys(handlers).forEach(function (key) {
-            db.ref(ROOM + "/" + key).on("value", function (snap) {
-              var v = snap.val();
-              if (v === null) {
-                // クラウドに未登録：手元に意味のあるデータがあれば初期投入
-                var lc = localCache[key];
-                if (lc && lc !== "null" && lc !== "[]" && lc !== "{}") {
-                  try { db.ref(ROOM + "/" + key).set(JSON.parse(lc)).catch(function () {}); } catch (e) {}
-                }
-                return;
-              }
-              applyRemote(key, v);
+      loadScript(SDK + "firebase-auth-compat.js", function () {
+        loadScript(SDK + "firebase-database-compat.js", function () {
+          try {
+            if (!firebase.apps || !firebase.apps.length) firebase.initializeApp(firebaseConfig);
+            // 匿名認証が成立してからDB接続（ルールが auth != null を要求するため）
+            firebase.auth().onAuthStateChanged(function (user) { if (user) setupDb(); });
+            firebase.auth().signInAnonymously().catch(function () {
+              setStatus("☁ クラウド同期：認証失敗（ローカル保存のみ）", "#C62828");
             });
-          });
-        } catch (e) { setStatus("☁ クラウド同期：接続エラー（ローカル保存のみ）", "#C62828"); }
+          } catch (e) { setStatus("☁ クラウド同期：接続エラー（ローカル保存のみ）", "#C62828"); }
+        });
       });
     });
   }
