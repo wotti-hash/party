@@ -206,6 +206,7 @@
   .hist-item.cat-出欠   { border-left-color: #2E7D46; } .hist-item.cat-出欠 .cat { background: #2E7D46; }
   .hist-item.cat-声がけ { border-left-color: #6A1B9A; } .hist-item.cat-声がけ .cat { background: #6A1B9A; }
   .hist-item.cat-行     { border-left-color: #0078D4; } .hist-item.cat-行 .cat { background: #0078D4; }
+  .hist-item.cat-周知   { border-left-color: #C62828; } .hist-item.cat-周知 .cat { background: #C62828; }
   .hist-item .d { font-size: 12.5px; color: #333; margin-top: 3px; line-height: 1.5; word-break: break-all; }
 
   /* ============ コメント機能 ============ */
@@ -314,6 +315,8 @@
         <th class="sortable" data-key="company" style="min-width:150px;">会社名(IBMor総研)<span class="ar">↕</span></th>
         <th class="sortable chk-cell" data-key="asked">声がけ済<span class="ar">↕</span></th>
         <th class="sortable" data-key="status" style="width:110px;">出欠<span class="ar">↕</span></th>
+        <th class="sortable" data-key="announcer" style="width:110px;">周知担当者<span class="ar">↕</span></th>
+        <th class="sortable chk-cell" data-key="announced">周知済<span class="ar">↕</span></th>
         <th class="sortable" data-key="note" style="min-width:160px;">備考<span class="ar">↕</span></th>
         <th class="del">削除</th>
       </tr>
@@ -329,7 +332,7 @@
   </div>
 
   <div class="note">
-    <b>出欠</b>は「未定 / 出席 / 欠席」から選択。<b>声がけ済</b>はチェックボックスで管理します。集計カードは変更のたびに自動更新されます。
+    <b>出欠</b>は「未定 / 出席 / 欠席」から選択。<b>声がけ済</b>はチェックボックスで管理します。<b>周知担当者</b>は幹事（桑垣・山下・千葉）から選択し、周知が完了したら<b>周知済</b>にチェックしてください。集計カードは変更のたびに自動更新されます。
   </div>
 </div>
 
@@ -642,11 +645,13 @@ window.EditHistory = (function () {
   var body   = document.getElementById("att-body");
   var saveNote = document.getElementById("save-note");
 
+  var ANNOUNCERS = ["", "桑垣", "山下", "千葉"];
+
   var SEED = [
-    { name: "桑垣",   company: "IBM",   asked: true,  status: "出席", note: "幹事" },
-    { name: "山下",   company: "IBM",   asked: true,  status: "出席", note: "幹事" },
-    { name: "",       company: "IBM",   asked: false, status: "未定", note: "" },
-    { name: "",       company: "総研",  asked: false, status: "未定", note: "声がけ中" }
+    { name: "桑垣",   company: "IBM",   asked: true,  status: "出席", note: "幹事", announcer: "", announced: false },
+    { name: "山下",   company: "IBM",   asked: true,  status: "出席", note: "幹事", announcer: "", announced: false },
+    { name: "",       company: "IBM",   asked: false, status: "未定", note: "",     announcer: "", announced: false },
+    { name: "",       company: "総研",  asked: false, status: "未定", note: "声がけ中", announcer: "", announced: false }
   ];
 
   var rows = load();
@@ -682,6 +687,7 @@ window.EditHistory = (function () {
     return rows.slice().sort(function (a, b) {
       if (k === "no") { return (rows.indexOf(a) - rows.indexOf(b)) * dir; }  // 元の入力順
       if (k === "asked") { return ((a.asked ? 0 : 1) - (b.asked ? 0 : 1)) * dir; }
+      if (k === "announced") { return ((a.announced ? 0 : 1) - (b.announced ? 0 : 1)) * dir; }
       if (k === "status") {
         var ar = (STATUS_RANK[a.status] == null ? 9 : STATUS_RANK[a.status]);
         var br = (STATUS_RANK[b.status] == null ? 9 : STATUS_RANK[b.status]);
@@ -749,6 +755,37 @@ window.EditHistory = (function () {
       });
       tdSt.appendChild(sel);
       tr.appendChild(tdSt);
+
+      // 周知担当者
+      var tdAnn = document.createElement("td");
+      tdAnn.setAttribute("data-label", "周知担当者");
+      var selAnn = document.createElement("select");
+      selAnn.className = "att-sel";
+      ANNOUNCERS.forEach(function (a) {
+        var o = document.createElement("option");
+        o.value = a; o.textContent = a || "（未定）"; if (a === r.announcer) o.selected = true;
+        selAnn.appendChild(o);
+      });
+      selAnn.addEventListener("change", function () {
+        var old = r.announcer; r.announcer = selAnn.value;
+        save(); updateSummary();
+        EditHistory.log("周知", rowLabel(i, r) + " 周知担当者：" + (old || "（未定）") + "→" + (selAnn.value || "（未定）"));
+      });
+      tdAnn.appendChild(selAnn);
+      tr.appendChild(tdAnn);
+
+      // 周知済
+      var tdAnnd = document.createElement("td");
+      tdAnnd.className = "chk-cell";
+      tdAnnd.setAttribute("data-label", "周知済");
+      var chkAnnd = document.createElement("input");
+      chkAnnd.type = "checkbox"; chkAnnd.className = "chk"; chkAnnd.checked = !!r.announced;
+      chkAnnd.addEventListener("change", function () {
+        r.announced = chkAnnd.checked; save(); updateSummary();
+        EditHistory.log("周知", rowLabel(i, r) + " 周知済：" + (chkAnnd.checked ? "OFF→ON（済）" : "ON→OFF（未）"));
+      });
+      tdAnnd.appendChild(chkAnnd);
+      tr.appendChild(tdAnnd);
 
       tr.appendChild(editableCell(r, "note", "（任意）", "備考", i));
 
@@ -818,7 +855,7 @@ window.EditHistory = (function () {
   });
 
   document.getElementById("add-row").addEventListener("click", function () {
-    rows.push({ name: "", company: "", asked: false, status: "未定", note: "" });
+    rows.push({ name: "", company: "", asked: false, status: "未定", note: "", announcer: "", announced: false });
     save(); render();
     EditHistory.log("行", "行を追加（#" + rows.length + "）");
     var cells = body.querySelectorAll("tr:last-child td.editable");
@@ -826,10 +863,10 @@ window.EditHistory = (function () {
   });
 
   function buildCSV() {
-    var head = ["No", "名前", "会社名", "声がけ済", "出欠", "備考"];
+    var head = ["No", "名前", "会社名", "声がけ済", "出欠", "周知担当者", "周知済", "備考"];
     var lines = [head.join(",")];
     rows.forEach(function (r, i) {
-      lines.push([ (i + 1), csvCell(r.name), csvCell(r.company), r.asked ? "済" : "未", csvCell(r.status), csvCell(r.note) ].join(","));
+      lines.push([ (i + 1), csvCell(r.name), csvCell(r.company), r.asked ? "済" : "未", csvCell(r.status), csvCell(r.announcer), r.announced ? "済" : "未", csvCell(r.note) ].join(","));
     });
     return lines.join("\r\n");
   }
@@ -861,7 +898,7 @@ window.EditHistory = (function () {
   });
   document.getElementById("clear-all").addEventListener("click", function () {
     if (confirm("出席者リストをすべて消去します。よろしいですか？")) {
-      rows = [{ name: "", company: "", asked: false, status: "未定", note: "" }];
+      rows = [{ name: "", company: "", asked: false, status: "未定", note: "", announcer: "", announced: false }];
       save(); render();
       EditHistory.log("行", "出席者リストを全消去");
     }
